@@ -166,7 +166,7 @@ main{max-width:720px;margin:0 auto;padding:72px 18px 48px}
 .q-meta{font-size:12.5px;color:var(--ink2);margin-top:6px}
 .opts{margin-top:22px;display:flex;flex-direction:column;gap:10px}
 
-/* ===== 选项：光晕跟随 + 柔和入场 ===== */
+/* ===== 选项 ===== */
 .opt{
   position:relative;overflow:hidden;
   display:flex;align-items:center;gap:12px;width:100%;text-align:left;
@@ -244,7 +244,7 @@ main{max-width:720px;margin:0 auto;padding:72px 18px 48px}
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media(max-width:600px){.grid-2{grid-template-columns:1fr}}
 
-/* ===== 四维能力表：进度条 ===== */
+/* ===== 四维能力表 ===== */
 .dim-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px dashed var(--line)}
 .dim-row:last-child{border-bottom:none}
 .dim-name{flex:none;width:56px;font-size:14px;font-weight:600}
@@ -274,7 +274,7 @@ html[data-theme="dark"] .badge.low{color:#E79A93}
 .analysis p{font-size:14.5px;color:var(--ink);margin-bottom:10px;line-height:1.75}
 .analysis p:last-child{margin-bottom:0}
 .radar-wrap{display:flex;align-items:center;gap:8px;flex-direction:column}
-.radar-wrap canvas{width:100%;max-width:320px;margin:0 auto;display:block}
+.radar-wrap canvas{width:100%;max-width:340px;margin:0 auto;display:block}
 .radar-legend{display:flex;flex-wrap:wrap;gap:6px 16px;justify-content:center;margin-top:12px}
 .radar-legend span{font-size:12.5px;color:var(--ink2);display:inline-flex;align-items:center;gap:6px}
 .radar-legend i{width:8px;height:8px;border-radius:50%;background:var(--accent);flex:none;box-shadow:0 0 8px rgba(var(--glow-rgb),.5)}
@@ -297,15 +297,21 @@ html[data-theme="dark"] .badge.low{color:#E79A93}
 }
 .disclaimer .tag{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:1px 8px;font-size:11px;margin-right:6px;color:var(--ink2);vertical-align:1px}
 
-/* ===== iOS 声音提示 ===== */
+/* ===== iOS 声音提示：5 秒后淡出 ===== */
 .ios-hint{
-  position:fixed;left:50%;bottom:18px;transform:translateX(-50%);
+  position:fixed;left:50%;bottom:18px;transform:translateX(-50%) translateY(8px);
   background:var(--card);border:1px solid var(--line);border-radius:10px;
   padding:8px 14px;font-size:12px;color:var(--ink2);
-  display:none;align-items:center;gap:8px;z-index:80;box-shadow:var(--shadow);
+  display:flex;align-items:center;gap:8px;z-index:80;box-shadow:var(--shadow);
+  opacity:0;pointer-events:none;
+  transition:opacity .6s ease, transform .6s cubic-bezier(.22,1,.36,1);
+  max-width:calc(100vw - 32px);
 }
-.ios-hint.show{display:flex;animation:viewIn .4s ease}
-.ios-hint svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8}
+.ios-hint.show{
+  opacity:1;
+  transform:translateX(-50%) translateY(0);
+}
+.ios-hint svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;flex:none}
 
 /* ===== 减动效 ===== */
 @media (prefers-reduced-motion: reduce){
@@ -416,7 +422,10 @@ var SIT = [
   {q:"如果给你一天完全自由的时间，你会优先选择？",opts:["去一个没去过的地方，哪怕只是周边走走。","和信任的少数人待在一起，或独处充电。","暂时断联，不做任何与学业、竞争相关的事。","做一件纯粹让自己开心、与产出无关的事。"]}
 ];
 var DIM_NAMES = ["觉察力","反思力","重构力","行动力"];
-var SCALE_LABELS = ["非常不符合","比较不符合","一般","比较符合","非常符合"];
+
+/* 五级李克特选项：从「非常符合」到「非常不符合」，顺应阅读直觉
+ * 分值映射：非常符合=5，比较符合=4，一般=3，比较不符合=2，非常不符合=1 */
+var SCALE_LABELS = ["非常符合","比较符合","一般","比较不符合","非常不符合"];
 
 /* ================================================================
  * 结果文案库
@@ -522,15 +531,12 @@ function sfxDone(){
   if(!soundOn || !AC || !master) return;
   try{
     var now = AC.currentTime;
-
-    // 和弦总线：0.4s 缓慢进入，2.2s 缓缓消散
     var chordBus = AC.createGain();
     chordBus.gain.setValueAtTime(0.0001, now);
     chordBus.gain.exponentialRampToValueAtTime(0.18, now + 0.40);
     chordBus.gain.exponentialRampToValueAtTime(0.0001, now + 2.20);
     chordBus.connect(master);
 
-    // C4 / E4 / G4 三音错落进入，像冥想钵一样铺开
     var freqs = [261.63, 329.63, 392.00];
     freqs.forEach(function(freq, i){
       var o = AC.createOscillator(), g = AC.createGain();
@@ -545,20 +551,33 @@ function sfxDone(){
   }catch(e){}
 }
 
-function checkIOSAudio(){
-  if(!/iPhone|iPad|iPod/.test(navigator.userAgent)) return;
-  setTimeout(function(){
-    if(!AC || !soundOn) return;
-    try{
-      var an = AC.createAnalyser();
-      master.connect(an);
-      var buf = new Uint8Array(an.fftSize);
-      an.getByteFrequencyData(buf);
-      var sum = 0;
-      for(var i = 0; i < buf.length; i++) sum += buf[i];
-      if(sum === 0) $("iosHint").classList.add("show");
-    }catch(e){}
-  }, 700);
+/* ================================================================
+ * iOS 静音提示：5 秒后淡出
+ * ================================================================ */
+var iosHintTimer = null;
+var iosHintShownOnce = false;
+
+var iosNeedsMuteHint = (function(){
+  if(!/iPhone|iPad|iPod/.test(navigator.userAgent)) return false;
+  try{
+    if(navigator.audioSession && 'type' in navigator.audioSession){
+      navigator.audioSession.type = 'playback';
+      return false;
+    }
+  }catch(e){}
+  return true;
+})();
+
+function showIOSHintBriefly(){
+  if(!iosNeedsMuteHint) return;
+  var hint = $("iosHint");
+  if(!hint) return;
+  hint.classList.add("show");
+  if(iosHintTimer) clearTimeout(iosHintTimer);
+  iosHintTimer = setTimeout(function(){
+    hint.classList.remove("show");
+    iosHintTimer = null;
+  }, 5000);
 }
 
 /* ================================================================
@@ -581,17 +600,22 @@ themeBtn.addEventListener("click", function(){
   localStorage.setItem("scale-theme", cur);
   syncThemeIcon();
 });
+
 function syncSoundIcon(){
   soundBtn.setAttribute("aria-checked", String(soundOn));
   $("iconSound").style.display = soundOn ? "block" : "none";
   $("iconMute").style.display  = soundOn ? "none" : "block";
 }
+
 soundBtn.addEventListener("click", function(){
   soundOn = !soundOn;
   localStorage.setItem("scale-sound", soundOn ? "on" : "off");
   if(master) master.gain.value = soundOn ? 0.5 : 0;
   syncSoundIcon();
-  if(soundOn) initAudio();
+  if(soundOn){
+    initAudio();
+    showIOSHintBriefly();
+  }
 });
 syncSoundIcon();
 
@@ -615,8 +639,9 @@ function renderQuestion(){
   if(i < CORE.length){
     qText.textContent = CORE[i].q;
     qMeta.textContent = "请选择最符合你实际情况的选项";
+    // 从上到下：非常符合 → 非常不符合，分值 5 → 1
     items = SCALE_LABELS.map(function(label, v){
-      return {val: v + 1, marker: String(v + 1), text: label};
+      return {val: 5 - v, marker: "", text: label};
     });
   }else{
     var st = SIT[i - CORE.length];
@@ -651,7 +676,13 @@ function choose(val, btn){
   if(locked) return;
   locked = true;
   answers[idx] = val;
-  initAudio(); sfxSelect(); checkIOSAudio();
+  initAudio(); sfxSelect();
+
+  if(!iosHintShownOnce && soundOn){
+    iosHintShownOnce = true;
+    showIOSHintBriefly();
+  }
+
   var opts = qOpts.querySelectorAll(".opt");
   opts.forEach(function(o){ o.classList.remove("sel"); });
   btn.classList.add("sel");
@@ -698,7 +729,7 @@ function compute(){
 function levelOf(p){ return p >= 80 ? "高" : (p >= 44 ? "中" : "低"); }
 
 /* ================================================================
- * 雷达图
+ * 雷达图：含四维文字标签
  * ================================================================ */
 function cssVar(name){
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -713,7 +744,9 @@ function drawRadar(cv, vals, progress){
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
 
-  var cx = w / 2, cy = h / 2, R = Math.min(w, h) / 2 - 30, N = 4;
+  var cx = w / 2, cy = h / 2;
+  var R = Math.min(w, h) / 2 - 46;
+  var N = 4;
 
   function pt(i, r){
     var a = -Math.PI / 2 + i * 2 * Math.PI / N;
@@ -723,6 +756,7 @@ function drawRadar(cv, vals, progress){
   var lineC = cssVar("--line");
   var accentC = cssVar("--accent");
   var accentSoft = cssVar("--accent-soft");
+  var inkColor = cssVar("--ink");
 
   ctx.strokeStyle = lineC; ctx.lineWidth = 1;
   for(var g = 1; g <= 4; g++){
@@ -739,6 +773,7 @@ function drawRadar(cv, vals, progress){
     ctx.moveTo(cx, cy); ctx.lineTo(p[0], p[1]);
   }
   ctx.stroke();
+
   ctx.beginPath();
   for(var i = 0; i <= N; i++){
     var p = pt(i % N, R * Math.max(vals[i % N], 3) / 100 * progress);
@@ -747,12 +782,24 @@ function drawRadar(cv, vals, progress){
   ctx.closePath();
   ctx.fillStyle = accentSoft; ctx.fill();
   ctx.strokeStyle = accentC; ctx.lineWidth = 2; ctx.stroke();
+
   for(var i = 0; i < N; i++){
     var p = pt(i, R);
     ctx.beginPath(); ctx.arc(p[0], p[1], 3.5, 0, Math.PI * 2);
     ctx.fillStyle = accentC; ctx.fill();
     ctx.beginPath(); ctx.arc(p[0], p[1], 6, 0, Math.PI * 2);
     ctx.fillStyle = accentSoft; ctx.fill();
+  }
+
+  ctx.font = "600 13px -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = inkColor;
+
+  var labelR = R + 22;
+  for(var i = 0; i < N; i++){
+    var lp = pt(i, labelR);
+    ctx.fillText(DIM_NAMES[i], lp[0], lp[1]);
   }
 }
 
